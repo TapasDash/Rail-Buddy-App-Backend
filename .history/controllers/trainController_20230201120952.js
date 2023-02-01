@@ -2,7 +2,7 @@ import asyncHandler from "express-async-handler";
 import TrainTimetable from "../models/TrainTimetable.js";
 
 export const getTrainData = asyncHandler(async (req, res) => {
-  const trainData = await TrainTimetable.find(req.query);
+  const trainData = await TrainTimetable.find(req.params);
 
   //   const trainNos = [];
   //   const uniqueTrainData = [];

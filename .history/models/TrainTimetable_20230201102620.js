@@ -17,7 +17,7 @@ const trainTimetableSchema = new Schema(
     trainNo: String,
     arrivalTime: String,
   },
-  { collection: "timetable" },
+  {collection:"timetable"}
   { timestamps: true }
 );
 
