@@ -17,7 +17,8 @@ const trainTimetableSchema = new Schema(
     trainNo: String,
     arrivalTime: String,
   },
-  { timestamps: true, collection: "timetable" }
+  { collection: "timetable" },
+  { timestamps: true }
 );
 
 const TrainTimetable = mongoose.model("timetable", trainTimetableSchema);
