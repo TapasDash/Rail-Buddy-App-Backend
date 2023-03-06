@@ -1,16 +1,26 @@
 import asyncHandler from "express-async-handler";
 import redisClient from "../config/redisClient.js";
 import TrainTimetable from "../models/TrainTimetable.js";
+import redisKey from "../config/redisKeys.js";
 
 export const getTrainData = asyncHandler(async (req, res) => {
-  const trainData = await TrainTimetable.find(req.query).sort("seq").lean();
-
-  //   const trainNos = [];
-  //   const uniqueTrainData = [];
-  //   trainData.map((data) => {
-  //     trainNos.push(data.trainNo);
-  //     if (!trainNos.includes(data.trainNo)) uniqueTrainData.push(data);
-  //   });
+  const { trainNo } = req.query;
+  const cachedTrainData = await redisClient.get(
+    `${redisKey.TRAIN_SCHEDULE}-${trainNo}`
+  );
+  if (cachedTrainData) {
+    console.log("using cached data");
+    return res.status(200).json({
+      cached: true,
+      success: true,
+      data: JSON.parse(cachedTrainData),
+    });
+  }
+  const trainData = await TrainTimetable.find({ trainNo }).sort("seq").lean();
+  await redisClient.set(
+    `${redisKey.TRAIN_SCHEDULE}-${trainNo}`,
+    JSON.stringify(trainData)
+  );
 
   return res.status(200).json({
     success: true,
@@ -20,15 +30,8 @@ export const getTrainData = asyncHandler(async (req, res) => {
 
 export const getTrainsBetweenStations = asyncHandler(async (req, res) => {
   const { fromStation, toStation } = req.params;
-  // let fromStationData = await TrainTimetable.find({
-  //   stationCode: fromStation,
-  // });
-  // let toStationData = await TrainTimetable.find({
-  //   stationCode: toStation,
-  // });
-
   const cachedTrainBtwData = await redisClient.get(
-    `trainsbtw-${fromStation}-${toStation}`
+    `${redisKey.TRAINS_BETWEEN_STATIONS}-${fromStation}-${toStation}`
   );
   if (cachedTrainBtwData) {
     console.log("using cached data");
@@ -42,51 +45,12 @@ export const getTrainsBetweenStations = asyncHandler(async (req, res) => {
   const [fromStationData, toStationData] = await Promise.all([
     await TrainTimetable.find({
       stationCode: fromStation,
-    }),
+    }).lean(),
     await TrainTimetable.find({
       stationCode: toStation,
-    }),
+    }).lean(),
   ]);
 
-  // const fromStationData = [
-  //   {
-  //     _id: {
-  //       $oid: "63ef5390647b51486cdac0a6",
-  //     },
-  //     departureTime: "15:50:00",
-  //     destinationStation: "CSMT",
-  //     destinationStationName: "CST-MUMBAI",
-  //     distance: "18",
-  //     seq: 2,
-  //     sourceStation: "BBS",
-  //     sourceStationName: "BHUBANESWAR",
-  //     stationCode: "KUR",
-  //     stationName: "KHURDA ROAD",
-  //     trainName: "KONARK EXPRE",
-  //     trainNo: "11020",
-  //     arrivalTime: "15:45:00",
-  //   },
-  // ];
-
-  // const data2 = [
-  //   {
-  //     _id: {
-  //       $oid: "63ef5390647b51486cdac0a9",
-  //     },
-  //     departureTime: "17:50:00",
-  //     destinationStation: "CSMT",
-  //     destinationStationName: "CST-MUMBAI",
-  //     distance: "165",
-  //     seq: 5,
-  //     sourceStation: "BBS",
-  //     sourceStationName: "BHUBANESWAR",
-  //     stationCode: "BAM",
-  //     stationName: "BERHAMPUR",
-  //     trainName: "KONARK EXPRE",
-  //     trainNo: "11020",
-  //     arrivalTime: "17:40:00",
-  //   },
-  // ];
   const trainBtw = [];
 
   fromStationData.map((fromStation) => {
@@ -104,7 +68,7 @@ export const getTrainsBetweenStations = asyncHandler(async (req, res) => {
       trainBtw.push({ src: fromStation, dest: toStationDataFiltered });
   });
   await redisClient.set(
-    `trainsbtw-${fromStation}-${toStation}`,
+    `${redisKey.TRAINS_BETWEEN_STATIONS}-${fromStation}-${toStation}`,
     JSON.stringify(trainBtw)
   );
   return res.status(200).json({
@@ -114,19 +78,31 @@ export const getTrainsBetweenStations = asyncHandler(async (req, res) => {
 });
 
 export const getTrainInfo = asyncHandler(async (req, res) => {
-  const data = await TrainTimetable.find()
-    .select("trainNo trainName")
-    .limit(100);
-  const uniqueData = [
-    ...new Set(
-      data.map(({ trainNo, trainName }) => ({
-        trainNo,
-        trainName,
-      }))
-    ),
-  ]; //
+  const cachedTrainInfo = await redisClient.get(redisKey.TRAIN_INFO);
+  if (cachedTrainInfo) {
+    console.log("using cached data");
+    return res.status(200).json({
+      cached: true,
+      success: true,
+      data: JSON.parse(cachedTrainInfo),
+    });
+  }
+
+  const trainData = await TrainTimetable.aggregate()
+    .group({
+      _id: "$trainNo",
+      trainName: {
+        $addToSet: "$trainName",
+      },
+    })
+    .project({
+      trainName: { $arrayElemAt: ["$trainName", 0] },
+    });
+
+  await redisClient.set(redisKey.TRAIN_INFO, JSON.stringify(trainData));
+
   return res.status(200).json({
     success: true,
-    uniqueData,
+    data: trainData,
   });
 });
