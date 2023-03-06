@@ -11,5 +11,5 @@ trainTimetableRouter.route("/train").get(getTrainData);
 trainTimetableRouter
   .route("/train/:fromStation/:toStation")
   .get(getTrainsBetweenStations);
-trainTimetableRouter.route("/train-info").get(getTrainInfo);
+trainTimetableRouter.route("/train/info").get(getTrainInfo);
 export default trainTimetableRouter;
